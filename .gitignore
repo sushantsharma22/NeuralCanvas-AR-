@@ -1,6 +1,75 @@
-# Byte-compiled / optimized / DLL files
+NeuralCanvas AR - project .gitignore
+
+# Python bytecode
 __pycache__/
-*.py[codz]
+*.py[cod]
+*$py.class
+
+# Virtual environments
+neuralcanvas_env/
+.venv/
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/
+
+# Logs and runtime files
+*.log
+*.tmp
+*.pid
+
+# Build / distribution
+/build/
+/dist/
+/eggs/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# C extensions and compiled libs
+*.so
+*.dylib
+*.dll
+
+# Large generated assets and exports (do not track large binaries)
+/exports/images/
+/exports/videos/
+/exports/models/
+/assets/models/
+
+# Machine learning model checkpoints and temporary training files
+*.ckpt
+*.h5
+*.pb
+*.tflite
+*.pt
+*.pth
+
+# Media and audio caches
+*.wav
+*.mp3
+*.m4a
+
+# Database files
+*.sqlite3
+
+# Misc
+*.bak
+*.swp
+
+# Local IDE / OS specific
+.vscode/
+.idea/
+
+# Keep README, source, configs, scripts tracked. Ignore other heavy/runtime files above.
+
 *$py.class
 
 # C extensions
