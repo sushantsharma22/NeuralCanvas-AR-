@@ -24,276 +24,138 @@ NeuralCanvas AR transforms any webcam-enabled device into a virtual canvas where
 - **Eraser Tool**: Precision erasing with adjustable thickness
 
 ### Advanced Features
-- **Emotion-based Coloring**: Facial expression analysis for automatic color selection
-- **Voice Control**: Natural language commands for tool selection and canvas management
+- **Emotion-based Coloring**: (optional) Facial expression analysis for automatic color selection — currently disabled in this build
+- **Voice Control**: Removed in this build
 - **3D/2D Mode Toggle**: Support for both 2D drawing and 3D space interaction
 - **Session Recording**: Capture and replay drawing sessions
-- **Export Options**: Save artwork in multiple formats (PNG, JPEG)
+# NeuralCanvas AR
+
+A real-time augmented reality drawing application that enables users to create digital artwork using hand gestures and finger movements. The system combines computer vision, machine learning, and gesture recognition to provide an intuitive and responsive drawing experience.
+
+## Overview
+
+NeuralCanvas AR turns a webcam-enabled device into a virtual canvas. Use natural hand movements to draw, erase, change colors, save, and export artwork. This README focuses on how to set up and use the project.
+
+## Key Features
+
+- Real-time hand tracking and gesture recognition (MediaPipe-based)
+- Ultra-smooth drawing with velocity-aware smoothing
+- Color palette and quick color-change gesture
+- Save and export artwork (PNG/JPEG)
+- Session recording and replay
+
+> Note: Voice control and emotion-based coloring are not enabled in this build.
 
 ## System Requirements
 
-### Hardware
-- Webcam (minimum 720p resolution recommended)
-- 4GB RAM minimum, 8GB recommended
-- Modern CPU with support for OpenCV operations
-- Optional: Microphone for voice commands
-
-### Software
+- Webcam (720p recommended)
 - Python 3.8 or higher
-- OpenCV 4.8+
-- MediaPipe 0.10+
-- TensorFlow 2.13+
-- See `requirements.txt` for complete dependency list
+- 4GB RAM minimum, 8GB recommended
+
+See `requirements.txt` for full dependency details.
 
 ## Installation
 
-### Automatic Installation
+Automatic:
+
 ```bash
 chmod +x INSTALL.sh
 ./INSTALL.sh
 ```
 
-### Manual Installation
-1. Clone the repository:
+Manual:
+
 ```bash
 git clone https://github.com/yourusername/NeuralCanvas-AR.git
 cd NeuralCanvas-AR
-```
-
-2. Create and activate virtual environment:
-```bash
 python -m venv neuralcanvas_env
-source neuralcanvas_env/bin/activate  # On Windows: neuralcanvas_env\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
+source neuralcanvas_env/bin/activate
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-### Basic Operation
-```bash
-# Activate virtual environment
-source neuralcanvas_env/bin/activate
+Activate the environment and run the app:
 
-# Start NeuralCanvas AR
+```bash
+source neuralcanvas_env/bin/activate
 python main.py
 ```
 
-### Gesture Controls
+### Gesture Controls (summary)
 
-| Gesture | Action | Description |
-|---------|--------|-------------|
-| Index finger only | Draw | Primary drawing mode |
-| Index + Middle finger | Navigate | Move without drawing |
-| All fingers extended | Erase | Eraser tool |
-| Thumb + Index finger | Color Change | Cycle through color palette |
-| Index + Pinky finger | Shape Mode | Toggle shape recognition |
-| Thumb + Pinky finger | Voice Control | Activate/deactivate voice commands |
-| Three fingers | Save | Save current artwork |
-| Four fingers | Clear | Clear entire canvas |
-| Closed fist | Idle | Stop all drawing operations |
+- Index finger only: Draw
+- Index + Middle finger: Navigate
+- All fingers extended (4): Clear canvas
+- Three fingers: Save artwork
+- Thumb + Index finger (tap): Cycle color palette
+- Closed fist: Idle / stop drawing
 
 ### Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `q` | Quit application |
-| `c` | Clear canvas |
-| `s` | Save artwork |
-| `r` | Toggle recording |
-| `e` | Toggle emotion coloring |
-| `3` | Toggle 3D/2D mode |
-| `+/-` | Adjust brush size |
-| `u` | Undo last stroke |
+- `q` — Quit
+- `c` — Clear canvas
+- `s` — Save artwork
+- `r` — Toggle recording
+- `3` — Toggle 3D/2D mode
+- `+` / `-` — Adjust brush size
+- `u` — Undo last stroke
 
-### Voice Commands
-- "draw" - Switch to drawing mode
-- "erase" - Switch to eraser mode
-- "red/blue/green" - Change color
-- "clear" - Clear canvas
-- "save" - Save artwork
-- "bigger/smaller" - Adjust brush size
-
-## Project Structure
+## Project Structure (high level)
 
 ```
 NeuralCanvas-AR/
-├── main.py                    # Main application entry point
-├── requirements.txt           # Python dependencies
-├── INSTALL.sh                # Automated installation script
+├── main.py
+├── requirements.txt
+├── INSTALL.sh
 ├── config/
-│   ├── __init__.py
-│   └── settings.py           # Configuration parameters
 ├── core/
-│   ├── __init__.py
-│   ├── ai_predictor.py       # AI-based prediction algorithms
-│   ├── ar_renderer.py        # Augmented reality rendering
-│   ├── drawing_engine.py     # Core drawing functionality
-│   └── gesture_engine.py     # Hand gesture recognition
 ├── modules/
-│   ├── __init__.py
-│   ├── background_processor.py # Background image processing
-│   ├── face_analyzer.py      # Facial expression analysis
-│   ├── hand_tracker.py       # Hand tracking algorithms
-│   ├── session_recorder.py   # Session recording functionality
-│   ├── shape_recognizer.py   # Geometric shape recognition
-│   └── voice_controller.py   # Voice command processing
 ├── ui/
-│   ├── __init__.py
-│   ├── color_palette.py      # Color management interface
-│   ├── interface_manager.py  # UI coordination
-│   └── toolbar.py           # Drawing tools interface
 ├── utils/
-│   ├── __init__.py
-│   ├── file_manager.py       # File I/O operations
-│   ├── math_helpers.py       # Mathematical utilities
-│   └── performance_monitor.py # Performance tracking
 ├── assets/
-│   ├── models/              # AI model files
-│   ├── sounds/              # Audio feedback files
-│   └── textures/            # UI textures and images
 └── exports/
-    ├── images/              # Saved artwork
-    ├── models/              # 3D model exports
-    └── videos/              # Recorded sessions
 ```
 
 ## Configuration
 
-The application can be configured through `config/settings.py`:
+Edit `config/settings.py` for camera, drawing, and gesture thresholds (camera width/height, brush sizes, prediction thresholds, etc.).
 
-```python
-# Camera settings
-CAMERA_WIDTH = 1280
-CAMERA_HEIGHT = 720
-FPS_TARGET = 60
+## API Reference (brief)
 
-# Drawing parameters
-BRUSH_SIZE_DEFAULT = 8
-BRUSH_SIZE_MIN = 2
-BRUSH_SIZE_MAX = 50
-
-# Gesture recognition
-PREDICTION_THRESHOLD = 0.5
-MAX_HANDS = 2
-
-# Performance
-ENABLE_PERFORMANCE_LOGGING = True
-```
-
-## API Reference
-
-### Core Classes
-
-#### NeuralCanvasAR
-Main application class that coordinates all components.
-
-#### AdvancedGestureEngine
-Handles gesture recognition and classification.
-- `recognize_gesture(landmarks)` - Classify hand gesture
-- `get_confidence_score()` - Get recognition confidence
-
-#### NeuralDrawingEngine
-Manages drawing operations and canvas state.
-- `start_stroke(x, y, pressure, z)` - Begin new drawing stroke
-- `draw_point(x, y, pressure, z)` - Add point to current stroke
-- `end_stroke()` - Complete current stroke
-
-#### AdvancedHandTracker
-Provides hand detection and tracking capabilities.
-- `process_frame(frame)` - Process video frame for hands
-- `get_landmarks()` - Extract hand landmark coordinates
-
-## Performance Optimization
-
-The application includes several optimization techniques:
-
-- **Frame Buffering**: Intelligent frame management for consistent performance
-- **Coordinate Smoothing**: Velocity-based smoothing for natural drawing
-- **Memory Management**: Efficient canvas and stroke data handling
-- **Threading**: Background processing for non-critical operations
+- `NeuralCanvasAR` — main application class coordinating components
+- `AdvancedGestureEngine` — gesture classification
+- `NeuralDrawingEngine` — drawing and canvas management
+- `AdvancedHandTracker` — hand detection and landmark extraction
 
 ## Testing
 
-The project includes comprehensive test suites:
+Run the included tests:
 
 ```bash
-# Test drawing functionality
 python test_drawing.py
-
-# Test smooth drawing algorithms
 python test_smooth_drawing.py
-
-# Test gesture recognition
 python test_closed_hand.py
-
-# Comprehensive system test
 python comprehensive_test.py
 ```
 
 ## Troubleshooting
 
-### Common Issues
-
-**Camera not detected:**
-- Ensure webcam is connected and not in use by other applications
-- Try changing camera index in settings
-- Check camera permissions
-
-**Poor gesture recognition:**
-- Ensure adequate lighting
-- Position hand clearly in camera view
-- Calibrate gesture thresholds in settings
-
-**Performance issues:**
-- Lower camera resolution in settings
-- Disable performance logging
-- Close other resource-intensive applications
-
-**Dependencies not installing:**
-- Ensure Python 3.8+ is installed
-- Use virtual environment
-- Update pip: `pip install --upgrade pip`
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Commit changes: `git commit -am 'Add feature'`
-4. Push to branch: `git push origin feature-name`
-5. Submit a Pull Request
-
-### Development Guidelines
-- Follow PEP 8 style guidelines
-- Add comprehensive docstrings
-- Include unit tests for new features
-- Update documentation as needed
+- Camera not detected: check permissions and camera index in `config/settings.py`.
+- Poor gesture recognition: improve lighting and keep hand in view; tune thresholds in config.
+- Performance issues: reduce camera resolution and/or disable performance logging.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- MediaPipe team for hand tracking technology
-- OpenCV community for computer vision tools
-- TensorFlow team for machine learning framework
-- Contributors and testers who helped improve the application
+This project is licensed under the MIT License — see `LICENSE` for details.
 
 ## Version History
 
-- **v1.0.0** - Initial release with basic drawing functionality
-- **v1.1.0** - Added gesture recognition and voice control
-- **v1.2.0** - Ultra-smooth drawing engine with closed-hand detection
-- **v1.3.0** - Enhanced performance optimization and stability improvements
-
-## Support
-
-For support, bug reports, or feature requests, please open an issue on the GitHub repository or contact the development team.
+- v1.3.0 — Latest: performance and stability improvements
+- v1.2.0 — Ultra-smooth drawing engine and closed-hand detection
+- v1.1.0 — Gesture recognition added
+- v1.0.0 — Initial release
 
 ---
 
-*NeuralCanvas AR - Transforming digital art creation through advanced computer vision and gesture recognition technology.*
+NeuralCanvas AR — Real-time AR drawing with hand gestures.

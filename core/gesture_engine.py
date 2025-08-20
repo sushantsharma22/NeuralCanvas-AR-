@@ -7,6 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 from collections import deque
 import pickle
 import os
+from config.settings import Config
 
 class AdvancedGestureEngine:
     def __init__(self):
@@ -127,38 +128,43 @@ class AdvancedGestureEngine:
         # CRITICAL: Closed hand detection (all fingers down) - STOP DRAWING
         if finger_states == [0, 0, 0, 0, 0]:
             return "IDLE"  # Closed fist = completely idle, no drawing
-        
-        # Specific gesture patterns (exact matches first)
+        # Try matching against configured gesture patterns using simple voting
+        # This helps when a single finger (often the thumb) is noisy and
+        # avoids swapping SAVE <-> CLEAR incorrectly.
+        # Explicit rules for SAVE (three fingers: index+middle+ring) and
+        # CLEAR (four fingers) to reduce rapid toggling caused by thumb/pinky noise.
+        # Treat any 4-extended-finger case as CLEAR to make the action robust.
+        if extended_count == 4:
+            return "CLEAR"
+        # Prefer SAVE when index+middle+ring are extended; keep this rule strict
+        # to avoid confusing 2-finger NAVIGATE with SAVE.
+        if extended_count == 3 and finger_states[1] == 1 and finger_states[2] == 1 and finger_states[3] == 1:
+            return "SAVE"
+
+        # Try matching against configured gesture patterns using simple voting
+        best_match = None
+        best_score = -1
+        for name, pattern in Config.GESTURES.items():
+            matches = sum(1 for a, b in zip(finger_states, pattern) if a == b)
+            if matches > best_score:
+                best_score = matches
+                best_match = name
+
+        # If we have a strong match (4 or 5 matching fingers), accept it
+        if best_score >= 4:
+            return best_match
+
+        # Otherwise fall back to original heuristics for common cases
         if finger_states == [0, 1, 0, 0, 0]:
             return "DRAW"
-        elif finger_states == [0, 1, 1, 0, 0]:
-            return "NAVIGATE"
-        elif finger_states == [1, 1, 1, 1, 1]:
-            return "ERASE"
-        elif finger_states == [1, 1, 0, 0, 0]:
-            return "COLOR_CHANGE"
-        elif finger_states == [0, 1, 0, 0, 1]:
-            return "SHAPE_MODE"
-        elif finger_states == [1, 0, 0, 0, 1]:
-            return "VOICE_ACTIVATE"
-        elif finger_states == [0, 1, 1, 1, 0]:
-            return "SAVE"
-        elif finger_states == [1, 1, 1, 1, 0]:
-            return "CLEAR"
-        
-        # Fallback patterns based on count and primary fingers
-        elif extended_count == 1 and finger_states[1] == 1:  # Only index
+        if extended_count == 1 and finger_states[1] == 1:
             return "DRAW"
-        elif extended_count == 2 and finger_states[1] == 1 and finger_states[2] == 1:  # Index + Middle
+        if extended_count == 2 and finger_states[1] == 1 and finger_states[2] == 1:
             return "NAVIGATE"
-        elif extended_count == 5:  # All fingers
+        if extended_count == 5:
             return "ERASE"
-        elif extended_count == 2 and finger_states[0] == 1 and finger_states[1] == 1:  # Thumb + Index
-            return "COLOR_CHANGE"
-        elif extended_count == 4 and finger_states[4] == 0:  # Four fingers (no pinky)
-            return "CLEAR"
-        else:
-            return "NONE"
+
+        return "NONE"
     
     def _get_finger_states(self, landmarks):
         """Get finger extension states with reliable detection"""
@@ -210,12 +216,14 @@ class AdvancedGestureEngine:
         pinky_tip = landmarks[20]
         pinky_pip = landmarks[18] 
         pinky_mcp = landmarks[17]
-        
-        pinky_extended = (pinky_tip.y < pinky_pip.y - 0.03) and (pinky_tip.y < pinky_mcp.y - 0.05)
+        # Make pinky detection slightly stricter to avoid noise
+        pinky_extended = ((pinky_tip.y < pinky_pip.y - 0.035) and 
+                          (pinky_tip.y < pinky_mcp.y - 0.06) and
+                          (abs(pinky_tip.x - pinky_mcp.x) > 0.01))
         states.append(1 if pinky_extended else 0)
-        
+
         return states
-    
+
     def _calculate_gesture_confidence(self, landmarks, gesture):
         """Calculate confidence score for gesture recognition"""
         if gesture == "NONE" or gesture == "IDLE":
@@ -228,8 +236,6 @@ class AdvancedGestureEngine:
             "NAVIGATE": [0, 1, 1, 0, 0],
             "ERASE": [1, 1, 1, 1, 1],
             "COLOR_CHANGE": [1, 1, 0, 0, 0],
-            "SHAPE_MODE": [0, 1, 0, 0, 1],
-            "VOICE_ACTIVATE": [1, 0, 0, 0, 1],
             "SAVE": [0, 1, 1, 1, 0],
             "CLEAR": [1, 1, 1, 1, 0],
             "IDLE": [0, 0, 0, 0, 0]
@@ -241,6 +247,13 @@ class AdvancedGestureEngine:
             confidence = matches / len(expected)
         else:
             confidence = 0.5
+
+        # Boost confidence for explicit 3/4-finger detections to reduce flicker
+        extended_count = sum(finger_states)
+        if gesture == "CLEAR" and extended_count == 4:
+            confidence = max(confidence, 0.95)
+        if gesture == "SAVE" and extended_count == 3:
+            confidence = max(confidence, 0.95)
         
         return confidence
     
@@ -257,13 +270,21 @@ class AdvancedGestureEngine:
         gesture_counts = Counter(recent_gestures)
         most_common = gesture_counts.most_common(1)
         
-        # For immediate response, accept single detection if confidence is high
+        # For SAVE/CLEAR, require short-history agreement (at least 2 of last 3)
+        # or extremely high confidence to avoid rapid flicker between the two.
         if most_common:
             latest_gesture, latest_confidence = self.gesture_history[-1]
-            if latest_confidence > 0.8:  # High confidence - immediate response
-                return latest_gesture
-            elif most_common[0][1] >= 2:  # At least 2 occurrences
-                return most_common[0][0]
+            if latest_gesture in {"SAVE", "CLEAR"}:
+                if latest_confidence > 0.9:
+                    return latest_gesture
+                elif most_common[0][1] >= 2:
+                    return most_common[0][0]
+            else:
+                # For other gestures, allow an immediate high-confidence response
+                if latest_confidence > 0.85:
+                    return latest_gesture
+                elif most_common[0][1] >= 2:  # At least 2 occurrences
+                    return most_common[0][0]
         
         return "NONE"
     

@@ -47,25 +47,6 @@ class Config:
         "NAVIGATE": [0, 1, 1, 0, 0],      # Index + Middle
         "ERASE": [1, 1, 1, 1, 1],         # All fingers
         "COLOR_CHANGE": [1, 1, 0, 0, 0],  # Thumb + Index
-        "SHAPE_MODE": [0, 1, 0, 0, 1],    # Index + Pinky
-        "VOICE_ACTIVATE": [1, 0, 0, 0, 1], # Thumb + Pinky
         "SAVE": [0, 1, 1, 1, 0],          # Peace sign + middle
         "CLEAR": [1, 1, 1, 1, 0],          # Four fingers
     }
-
-    # Voice commands
-    VOICE_COMMANDS = [
-        "change color",
-        "bigger brush",
-        "smaller brush",
-        "save drawing",
-        "clear canvas",
-        "undo",
-        "redo",
-        "record session",
-        "stop recording",
-        "play music",
-        "change background",
-        "3d mode",
-        "2d mode",
-    ]

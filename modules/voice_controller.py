@@ -9,7 +9,11 @@ from typing import Optional, Callable
 class VoiceController:
     def __init__(self):
         self.recognizer = sr.Recognizer()
-        self.microphone = sr.Microphone()
+        try:
+            self.microphone = sr.Microphone()
+        except Exception as e:
+            print(f"VoiceController: Microphone init failed: {e}")
+            self.microphone = None
         self.listening = False
         self.command_queue = queue.Queue()
         self.listen_thread = None
@@ -48,11 +52,18 @@ class VoiceController:
     
     def start_listening(self):
         """Start listening for voice commands in a separate thread."""
-        if not self.listening:
-            self.listening = True
-            self.listen_thread = threading.Thread(target=self._listen_loop, daemon=True)
-            self.listen_thread.start()
-            print("Voice recognition started. Say commands like 'draw', 'red', 'clear', etc.")
+        if self.microphone is None:
+            print("VoiceController: No microphone available, cannot start listening.")
+            return
+
+        if self.listening:
+            print("VoiceController: already listening")
+            return
+
+        self.listening = True
+        self.listen_thread = threading.Thread(target=self._listen_loop, daemon=True)
+        self.listen_thread.start()
+        print("Voice recognition started. Say commands like 'draw', 'red', 'clear', etc.")
     
     def stop_listening(self):
         """Stop listening for voice commands."""
@@ -66,9 +77,19 @@ class VoiceController:
         while self.listening:
             try:
                 # Listen for audio with timeout
-                with self.microphone as source:
-                    # Listen for phrase with shorter timeout for responsiveness
-                    audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=3)
+                if self.microphone is None:
+                    time.sleep(1)
+                    continue
+
+                try:
+                    with self.microphone as source:
+                        # Listen for phrase with shorter timeout for responsiveness
+                        audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=3)
+                except Exception as e:
+                    # Handle audio context errors or concurrent access
+                    print(f"VoiceController listen error: {e}")
+                    time.sleep(0.2)
+                    continue
                 
                 # Try to recognize speech
                 try:

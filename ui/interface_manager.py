@@ -126,7 +126,7 @@ class InterfaceManager:
         instructions = [
             "GESTURES:",
             "👆 Draw", "✌️ Navigate", "✋ Erase",
-            "👍 Color", "🤟 Shape", "🤙 Voice"
+            "👍 Color"
         ]
         
         for i, instruction in enumerate(instructions):
@@ -138,28 +138,17 @@ class InterfaceManager:
     def draw_status_bar(self, frame, app_state):
         """Draw status bar with current information"""
         x, y, w, h = self.status_bar_rect
-        
+
         # Background
         overlay = frame.copy()
         cv2.rectangle(overlay, (x, y), (x + w, y + h), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-        
+
         # Border
         cv2.rectangle(frame, (x, y), (x + w, y + h), (100, 100, 100), 1)
-        
-        # Emotion info
-        emotion_info = app_state.get('emotion_info')
-        if emotion_info:
-            emotion, color = emotion_info
-            cv2.putText(frame, f"Emotion: {emotion.capitalize()}", (x + 10, y + 25),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-            
-            # Emotion color indicator
-            cv2.rectangle(frame, (x + 200, y + 10), (x + 240, y + 30), color, -1)
-            cv2.rectangle(frame, (x + 200, y + 10), (x + 240, y + 30), (255, 255, 255), 1)
-        
-        # Keyboard shortcuts
-        shortcuts = "Q:Quit | C:Clear | S:Save | R:Record | E:Emotion | 3:3D/2D | +/-:Brush | U:Undo"
+
+        # Keyboard shortcuts (no emotion display in this build)
+        shortcuts = "Q:Quit | C:Clear | S:Save | R:Record | 3:3D/2D | +/-:Brush | U:Undo"
         cv2.putText(frame, shortcuts, (x + 10, y + 55),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
     

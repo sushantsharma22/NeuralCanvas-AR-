@@ -13,48 +13,47 @@ from config.settings import Config
 from core.gesture_engine import AdvancedGestureEngine
 from core.drawing_engine import NeuralDrawingEngine
 from modules.hand_tracker import AdvancedHandTracker
-from modules.face_analyzer import EmotionColorMapper
-from modules.voice_controller import VoiceController
+# removed EmotionColorMapper and VoiceController per request
 from utils.performance_monitor import PerformanceMonitor
 from ui.interface_manager import InterfaceManager
 
 class NeuralCanvasAR:
     def __init__(self):
         print("🚀 Initializing NeuralCanvas AR - The Future of Digital Art!")
-        
+
         # Core components
         self.gesture_engine = AdvancedGestureEngine()
         self.hand_tracker = AdvancedHandTracker(max_hands=Config.MAX_HANDS)
-        self.emotion_mapper = EmotionColorMapper()
         self.performance_monitor = PerformanceMonitor()
-        self.voice_controller = VoiceController()
-        
+
         # Drawing system
         self.drawing_engine = None
         self.ui_manager = None
-        
+
         # Application state
         self.running = False
         self.current_mode = "2D"
-        self.voice_enabled = False
-        self.emotion_coloring = True
         self.auto_save = True
-        
+
         # Drawing state tracking
         self.drawing_active = False
         self.last_gesture = None
         self.last_drawing_point = None
         self.gesture_history = deque(maxlen=5)  # Track recent gestures for stability
         self.drawing_timeout = 0  # Frame counter for drawing timeout
-        
+
+        # Gesture action cooldowns to debounce tap gestures (hand_id, gesture) -> timestamp
+        self.gesture_cooldowns = {}
+        self.gesture_cooldown_seconds = 0.6
+
         # Performance tracking
         self.fps_counter = 0
         self.frame_times = deque(maxlen=30)
-        
+
         # Session recording
         self.recording = False
         self.session_frames = []
-        
+
         print("✅ NeuralCanvas AR initialized successfully!")
     
     def initialize_camera(self):
@@ -141,12 +140,17 @@ class NeuralCanvasAR:
         for hand_data in hand_results:
             landmarks = hand_data['landmarks']
             hand_id = hand_data['hand_id']
-            
-            # Recognize gesture
+
+            # Recognize gesture (stabilized) and also get the immediate/basic gesture
             gesture, confidence = self.gesture_engine.recognize_gesture(landmarks.landmark)
+            # Use the immediate/basic recognition for quick, tap-style actions so
+            # a single-frame tap (thumb+index etc.) doesn't get swallowed by
+            # the stabilizer which prefers repeated detections.
+            raw_gesture = self.gesture_engine._recognize_basic_gesture(landmarks.landmark)
+            raw_confidence = self.gesture_engine._calculate_gesture_confidence(landmarks.landmark, raw_gesture)
             
-            # Debug output for gesture detection (reduce spam)
-            if gesture != "NONE" and gesture != "COLOR_CHANGE":
+            # Debug output for gesture detection (show all gestures)
+            if gesture != "NONE":
                 print(f"🎯 Detected: {gesture} (confidence: {confidence:.2f})")
             
             # CRITICAL: Handle IDLE state (closed hand) - STOP DRAWING IMMEDIATELY
@@ -156,6 +160,29 @@ class NeuralCanvasAR:
                     self.drawing_engine.end_stroke()
                     self.drawing_active = False
                 continue  # Skip further processing for this hand
+
+            # QUICK ACTIONS: Immediate, debounced execution for tap-style gestures
+            quick_actions = {"COLOR_CHANGE", "SAVE", "CLEAR"}
+            now = time.time()
+            # Prefer the raw/basic gesture for quick tap actions (faster response)
+            # Use a slightly higher confidence threshold for SAVE/CLEAR to avoid
+            # brief finger noise causing accidental triggers.
+            required_conf = 0.3
+            if raw_gesture in {"SAVE", "CLEAR"}:
+                required_conf = 0.6
+
+            if raw_gesture in quick_actions and raw_confidence > required_conf:
+                cooldown_key = (hand_id, raw_gesture)
+                last_ts = self.gesture_cooldowns.get(cooldown_key, 0)
+                if now - last_ts > self.gesture_cooldown_seconds:
+                    cmd = self.execute_gesture_command(raw_gesture, landmarks, hand_id)
+                    if cmd:
+                        commands.append(cmd)
+                        # store cooldown timestamp
+                        self.gesture_cooldowns[cooldown_key] = now
+                        print(f"⚡ Executed quick action: {raw_gesture} -> {cmd}")
+                # Quick actions are not drawing gestures, skip drawing point extraction for them
+                continue
             
             # CRITICAL: If not drawing gesture and not high confidence, DON'T continue drawing
             if gesture not in ["DRAW", "ERASE"] and self.drawing_active:
@@ -210,15 +237,7 @@ class NeuralCanvasAR:
             next_color = colors[(current_idx + 1) % len(colors)]
             self.drawing_engine.change_color(next_color)
             return f"Changed color to {list(Config.COLORS.keys())[colors.index(next_color)]}"
-        
-        elif gesture == "VOICE_ACTIVATE":
-            self.voice_enabled = not self.voice_enabled
-            if self.voice_enabled:
-                self.voice_controller.start_listening()
-            else:
-                self.voice_controller.stop_listening()
-            return f"Voice control {'enabled' if self.voice_enabled else 'disabled'}"
-        
+
         elif gesture == "SAVE":
             self.save_artwork()
             return "Artwork saved"
@@ -227,66 +246,7 @@ class NeuralCanvasAR:
             self.drawing_engine.clear_canvas()
             return "Canvas cleared"
         
-        elif gesture == "SHAPE_MODE":
-            # Toggle shape recognition
-            self.drawing_engine.shape_recognition_enabled = not self.drawing_engine.shape_recognition_enabled
-            return f"Shape recognition {'enabled' if self.drawing_engine.shape_recognition_enabled else 'disabled'}"
-        
         return None
-    
-    def process_voice_command(self, command):
-        """Process voice commands and return status message"""
-        if command == "DRAW":
-            # Force drawing mode for next gesture
-            return "Voice: Drawing mode activated"
-        
-        elif command == "ERASE":
-            self.drawing_engine.clear_canvas()
-            return "Voice: Canvas cleared"
-        
-        elif command == "CLEAR":
-            self.drawing_engine.clear_canvas()
-            return "Voice: Canvas cleared"
-        
-        elif command == "UNDO":
-            # Add undo functionality if available
-            return "Voice: Undo (not implemented yet)"
-        
-        elif command.startswith("COLOR_"):
-            color_name = command.split("_")[1].lower()
-            color_map = {
-                'red': (0, 0, 255),
-                'blue': (255, 0, 0),
-                'green': (0, 255, 0),
-                'black': (0, 0, 0),
-                'white': (255, 255, 255),
-                'yellow': (0, 255, 255)
-            }
-            if color_name in color_map:
-                self.drawing_engine.change_color(color_map[color_name])
-                return f"Voice: Changed color to {color_name}"
-        
-        elif command == "SAVE":
-            self.save_artwork()
-            return "Voice: Artwork saved"
-        
-        elif command == "BRUSH_BIGGER":
-            current_size = getattr(self.drawing_engine, 'brush_size', 4)
-            new_size = min(current_size + 2, 20)
-            self.drawing_engine.brush_size = new_size
-            return f"Voice: Brush size increased to {new_size}"
-        
-        elif command == "BRUSH_SMALLER":
-            current_size = getattr(self.drawing_engine, 'brush_size', 4)
-            new_size = max(current_size - 2, 1)
-            self.drawing_engine.brush_size = new_size
-            return f"Voice: Brush size decreased to {new_size}"
-        
-        elif command == "STOP" or command == "QUIT":
-            self.running = False
-            return "Voice: Stopping application"
-        
-        return f"Voice: Unknown command '{command}'"
     
     def extract_drawing_point(self, landmarks, gesture, hand_id):
         """Extract drawing point from hand landmarks"""
@@ -386,24 +346,7 @@ class NeuralCanvasAR:
             self.drawing_active = False
             self.last_gesture = None
     
-    def update_emotion_coloring(self, frame):
-        """Update drawing color based on emotion"""
-        if self.emotion_coloring:
-            emotion, color = self.emotion_mapper.analyze_emotion(frame)
-            
-            # Gradually transition to emotion color
-            current_color = self.drawing_engine.current_color
-            blend_factor = 0.1
-            
-            new_color = tuple(
-                int(c * (1 - blend_factor) + e * blend_factor)
-                for c, e in zip(current_color, color)
-            )
-            
-            self.drawing_engine.change_color(new_color)
-            return emotion, color
-        
-        return None, None
+    # Emotion coloring feature removed
     
     def render_frame(self, frame, hand_results, commands, emotion_info):
         """Render final frame with all overlays"""
@@ -448,8 +391,7 @@ class NeuralCanvasAR:
             self.save_artwork()
         elif key == ord('r'):
             self.toggle_recording()
-        elif key == ord('e'):
-            self.emotion_coloring = not self.emotion_coloring
+    # 'e' - emotion coloring removed
         elif key == ord('3'):
             self.current_mode = "3D" if self.current_mode == "2D" else "2D"
         elif key == ord('=') or key == ord('+'):
@@ -510,91 +452,83 @@ class NeuralCanvasAR:
     def run(self):
         """Main application loop"""
         print("🎨 Starting NeuralCanvas AR...")
-        
+
         try:
             cap, frame_shape = self.initialize_camera()
         except RuntimeError as e:
             print(e)
             return
-        
+
         self.running = True
-        
-        print("\n" + "="*60)
+
+        # Print controls/help
+        print("\n" + "=" * 60)
         print("🎨 NEURALCANVAS AR - CONTROLS")
-        print("="*60)
+        print("=" * 60)
         print("GESTURES:")
         print("👆 Index finger alone: Draw")
         print("✌️  Index + Middle: Navigate")
         print("✋ All fingers: Erase")
         print("👍 Thumb + Index: Change color")
-        print("🤟 Index + Pinky: Toggle shape mode")
-        print("🤙 Thumb + Pinky: Voice control")
+        # Shape mode and voice control features removed
         print("✌️🖕 Three fingers: Save")
         print("🖖 Four fingers: Clear")
         print("\nKEYBOARD:")
         print("'q': Quit | 'c': Clear | 's': Save")
-        print("'r': Record | 'e': Emotion coloring")
+        print("'r': Record")
         print("'3': 3D/2D mode | '+/-': Brush size")
         print("'u': Undo")
-        print("="*60)
-        
+        print("=" * 60)
+
         while self.running:
             ret, frame = cap.read()
             if not ret:
                 break
-            
+
             # Flip for natural interaction
             frame = cv2.flip(frame, 1)
-            
+
             # Track hands
             hand_results = self.hand_tracker.process_frame(frame)
-            
+
             # Process gestures
             commands, drawing_points = self.process_gestures(hand_results)
-            
-            # Process voice commands if enabled
-            if self.voice_enabled:
-                voice_command = self.voice_controller.get_command()
-                if voice_command:
-                    voice_result = self.process_voice_command(voice_command)
-                    if voice_result:
-                        commands.append(voice_result)
-            
-            # Process drawing
+
+            # Process drawing points
             if drawing_points:
                 self.process_drawing_points(drawing_points)
-            
-            # Update emotion coloring
-            emotion_info = self.update_emotion_coloring(frame)
-            
+
+            # Emotion/voice features removed; keep placeholder
+            emotion_info = None
+
             # Render final frame
             final_frame = self.render_frame(frame, hand_results, commands, emotion_info)
-            
+
             # Add to recording if active
             if self.recording:
                 self.session_frames.append(final_frame.copy())
-            
+
             # Display
             cv2.imshow('🎨 NeuralCanvas AR - The Future of Digital Art', final_frame)
-            
+
             # Handle input
             if not self.handle_keyboard_input():
                 break
-            
+
             # Performance monitoring
             self.performance_monitor.update()
-        
+
         # Cleanup
-        cap.release()
+        try:
+            cap.release()
+        except Exception:
+            pass
         cv2.destroyAllWindows()
-        
-        # Stop voice controller
-        if self.voice_enabled:
-            self.voice_controller.stop_listening()
-        
+
+        # Save recording if any
         if self.recording:
             self.save_recording()
-        
+
         print("👋 Thanks for using NeuralCanvas AR!")
 
 if __name__ == "__main__":
