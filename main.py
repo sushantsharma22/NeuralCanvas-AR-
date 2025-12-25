@@ -16,6 +16,7 @@ from modules.hand_tracker import AdvancedHandTracker
 # removed EmotionColorMapper and VoiceController per request
 from utils.performance_monitor import PerformanceMonitor
 from ui.interface_manager import InterfaceManager
+from typing import Optional, List, Dict, Any
 
 class NeuralCanvasAR:
     def __init__(self):
@@ -26,9 +27,9 @@ class NeuralCanvasAR:
         self.hand_tracker = AdvancedHandTracker(max_hands=Config.MAX_HANDS)
         self.performance_monitor = PerformanceMonitor()
 
-        # Drawing system
-        self.drawing_engine = None
-        self.ui_manager = None
+        # Drawing system - will be initialized in initialize_camera()
+        self.drawing_engine: Optional[NeuralDrawingEngine] = None
+        self.ui_manager: Optional[InterfaceManager] = None
 
         # Application state
         self.running = False
@@ -127,7 +128,7 @@ class NeuralCanvasAR:
         """Process hand gestures with improved stability"""
         if not hand_results:
             # No hands detected - end any active drawing
-            if self.drawing_active:
+            if self.drawing_active and self.drawing_engine:
                 print("🛑 No hands detected - ending drawing stroke")
                 self.drawing_engine.end_stroke()
                 self.drawing_active = False
@@ -155,7 +156,7 @@ class NeuralCanvasAR:
             
             # CRITICAL: Handle IDLE state (closed hand) - STOP DRAWING IMMEDIATELY
             if gesture == "IDLE":
-                if self.drawing_active:
+                if self.drawing_active and self.drawing_engine:
                     print("🛑 Hand closed - ending drawing stroke")
                     self.drawing_engine.end_stroke()
                     self.drawing_active = False
@@ -188,7 +189,7 @@ class NeuralCanvasAR:
             if gesture not in ["DRAW", "ERASE"] and self.drawing_active:
                 # Only maintain drawing if we have very recent DRAW history AND decent confidence
                 recent_draws = sum(1 for g in list(self.gesture_history)[-3:] if g == "DRAW")
-                if recent_draws < 2 or confidence < 0.4:
+                if (recent_draws < 2 or confidence < 0.4) and self.drawing_engine:
                     print("🛑 No valid drawing gesture - ending drawing stroke")
                     self.drawing_engine.end_stroke()
                     self.drawing_active = False
@@ -228,6 +229,8 @@ class NeuralCanvasAR:
     
     def execute_gesture_command(self, gesture, landmarks, hand_id):
         """Execute gesture-based commands"""
+        if not self.drawing_engine:
+            return None
         h, w = self.drawing_engine.height, self.drawing_engine.width
         
         if gesture == "COLOR_CHANGE":
@@ -250,6 +253,8 @@ class NeuralCanvasAR:
     
     def extract_drawing_point(self, landmarks, gesture, hand_id):
         """Extract drawing point from hand landmarks"""
+        if not self.drawing_engine:
+            return None
         h, w = self.drawing_engine.height, self.drawing_engine.width
         
         # Use index finger tip for drawing
@@ -273,6 +278,8 @@ class NeuralCanvasAR:
     
     def process_drawing_points(self, drawing_points):
         """Process drawing points with improved stroke continuity"""
+        if not self.drawing_engine:
+            return
         
         # Update drawing timeout
         if drawing_points:
@@ -340,7 +347,7 @@ class NeuralCanvasAR:
             self.last_gesture = point['gesture']
         
         # End stroke only if no drawing points for several frames (not just 1)
-        if not drawing_points and self.drawing_active and self.drawing_timeout > 3:
+        if not drawing_points and self.drawing_active and self.drawing_timeout > 3 and self.drawing_engine:
             print("🎨 Ending drawing stroke (gesture timeout)")
             self.drawing_engine.end_stroke()
             self.drawing_active = False
@@ -350,6 +357,9 @@ class NeuralCanvasAR:
     
     def render_frame(self, frame, hand_results, commands, emotion_info):
         """Render final frame with all overlays"""
+        if not self.drawing_engine or not self.ui_manager:
+            return frame
+        
         # Get drawing canvas
         canvas = self.drawing_engine.get_composite_canvas()
         
@@ -385,7 +395,7 @@ class NeuralCanvasAR:
         
         if key == ord('q'):
             return False
-        elif key == ord('c'):
+        elif key == ord('c') and self.drawing_engine:
             self.drawing_engine.clear_canvas()
         elif key == ord('s'):
             self.save_artwork()
@@ -394,19 +404,23 @@ class NeuralCanvasAR:
     # 'e' - emotion coloring removed
         elif key == ord('3'):
             self.current_mode = "3D" if self.current_mode == "2D" else "2D"
-        elif key == ord('=') or key == ord('+'):
+        elif (key == ord('=') or key == ord('+')) and self.drawing_engine:
             new_size = min(self.drawing_engine.brush_size + 2, Config.MAX_BRUSH_SIZE)
             self.drawing_engine.change_brush_size(new_size)
-        elif key == ord('-'):
+        elif key == ord('-') and self.drawing_engine:
             new_size = max(self.drawing_engine.brush_size - 2, Config.MIN_BRUSH_SIZE)
             self.drawing_engine.change_brush_size(new_size)
-        elif key == ord('u'):
+        elif key == ord('u') and self.drawing_engine:
             self.drawing_engine.undo()
         
         return True
     
     def save_artwork(self):
         """Save current artwork"""
+        if not self.drawing_engine:
+            print("⚠️  Cannot save: drawing engine not initialized")
+            return
+        
         timestamp = int(time.time())
         filename = f"exports/images/neural_canvas_{timestamp}.png"
         
